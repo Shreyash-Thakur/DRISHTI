@@ -1,0 +1,31 @@
+services:
+  backend:
+    build: ./backend
+    container_name: drishti-backend
+    ports:
+      - "8000:8000"
+    environment:
+      DRISHTI_DB_PATH: /data/drishti.db
+      DRISHTI_TOPOLOGY_PATH: /data/topology.json
+    volumes:
+      - ./data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  simulator:
+    build: ./simulator
+    container_name: drishti-simulator
+    ports:
+      - "8100:8100"
+    environment:
+      SIM_BACKEND_URL: http://backend:8000
+      SIM_TOPOLOGY_PATH: /data/topology.json
+      SIM_INTERVAL_SECONDS: "5"
+    volumes:
+      - ./data:/data
+    depends_on:
+      backend:
+        condition: service_healthy

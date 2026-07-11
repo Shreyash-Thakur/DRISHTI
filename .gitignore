@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Environment
+.env
+
+# Data artifacts (topology.json IS tracked; the DB is generated)
+data/*.db
+data/*.db-wal
+data/*.db-shm
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store

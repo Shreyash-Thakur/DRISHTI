@@ -1,0 +1,70 @@
+{
+  "nodes": [
+    { "id": "ce-site-a", "name": "CE-Site-A", "role": "CE", "site": "Site A (Bengaluru)", "loopback": "10.255.0.11" },
+    { "id": "ce-site-b", "name": "CE-Site-B", "role": "CE", "site": "Site B (Ahmedabad)", "loopback": "10.255.0.12" },
+    { "id": "pe-east", "name": "PE-East", "role": "PE", "site": "East POP", "loopback": "10.255.0.1" },
+    { "id": "pe-west", "name": "PE-West", "role": "PE", "site": "West POP", "loopback": "10.255.0.2" },
+    { "id": "p-core-1", "name": "P-Core-1", "role": "P", "site": "Core DC-1", "loopback": "10.255.0.3" },
+    { "id": "p-core-2", "name": "P-Core-2", "role": "P", "site": "Core DC-2", "loopback": "10.255.0.4" }
+  ],
+  "links": [
+    {
+      "id": "ce-site-a__pe-east",
+      "kind": "access",
+      "bandwidth_mbps": 1000,
+      "a": { "node": "ce-site-a", "interface": "GigabitEthernet0/0" },
+      "b": { "node": "pe-east", "interface": "GigabitEthernet0/1" }
+    },
+    {
+      "id": "ce-site-b__pe-west",
+      "kind": "access",
+      "bandwidth_mbps": 1000,
+      "a": { "node": "ce-site-b", "interface": "GigabitEthernet0/0" },
+      "b": { "node": "pe-west", "interface": "GigabitEthernet0/1" }
+    },
+    {
+      "id": "pe-east__p-core-1",
+      "kind": "core",
+      "bandwidth_mbps": 10000,
+      "a": { "node": "pe-east", "interface": "TenGigE0/0/0" },
+      "b": { "node": "p-core-1", "interface": "TenGigE0/0/1" }
+    },
+    {
+      "id": "pe-east__p-core-2",
+      "kind": "core",
+      "bandwidth_mbps": 10000,
+      "a": { "node": "pe-east", "interface": "TenGigE0/0/1" },
+      "b": { "node": "p-core-2", "interface": "TenGigE0/0/1" }
+    },
+    {
+      "id": "pe-west__p-core-1",
+      "kind": "core",
+      "bandwidth_mbps": 10000,
+      "a": { "node": "pe-west", "interface": "TenGigE0/0/0" },
+      "b": { "node": "p-core-1", "interface": "TenGigE0/0/2" }
+    },
+    {
+      "id": "pe-west__p-core-2",
+      "kind": "core",
+      "bandwidth_mbps": 10000,
+      "a": { "node": "pe-west", "interface": "TenGigE0/0/1" },
+      "b": { "node": "p-core-2", "interface": "TenGigE0/0/2" }
+    },
+    {
+      "id": "p-core-1__p-core-2",
+      "kind": "core",
+      "bandwidth_mbps": 40000,
+      "a": { "node": "p-core-1", "interface": "HundredGigE0/1/0" },
+      "b": { "node": "p-core-2", "interface": "HundredGigE0/1/0" }
+    }
+  ],
+  "tunnels": [
+    { "id": "ipsec-a-to-b", "kind": "ipsec", "src": "ce-site-a", "dst": "ce-site-b" },
+    { "id": "ipsec-b-to-a", "kind": "ipsec", "src": "ce-site-b", "dst": "ce-site-a" }
+  ],
+  "bgp_sessions": [
+    { "id": "bgp-ce-a__pe-east", "type": "eBGP", "a": "ce-site-a", "b": "pe-east" },
+    { "id": "bgp-ce-b__pe-west", "type": "eBGP", "a": "ce-site-b", "b": "pe-west" },
+    { "id": "bgp-pe-east__pe-west", "type": "iBGP-VPNv4", "a": "pe-east", "b": "pe-west" }
+  ]
+}
