@@ -29,3 +29,22 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+
+  ml:
+    build: ./ml
+    container_name: drishti-ml
+    ports:
+      - "8200:8200"
+    environment:
+      ML_BACKEND_HTTP_URL: http://backend:8000
+      ML_BACKEND_WS_URL: ws://backend:8000/ws/live
+      ML_SIMULATOR_URL: http://simulator:8100
+      ML_DB_PATH: /data/drishti.db
+      ML_TOPOLOGY_PATH: /data/topology.json
+      ML_MODEL_DIR: /app/models
+    volumes:
+      - ./data:/data
+      - ./ml/models:/app/models
+    depends_on:
+      backend:
+        condition: service_healthy

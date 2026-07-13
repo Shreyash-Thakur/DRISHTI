@@ -114,6 +114,15 @@ Interactive API docs: **http://localhost:8000/docs** (backend) and
 | `DELETE /faults/{fault_id}` | Clear one fault |
 | `DELETE /faults` | Clear all faults |
 
+### ml / predictive fault engine (`:8200`)
+
+| Endpoint | Description |
+|---|---|
+| `GET /predictions` | Current precursor probability + estimated time-to-impact for every node/interface with a warm buffer |
+| `GET /predictions/{node_id}` | Current predictions for one node |
+| `WS /ws/predictions` | Pushes a prediction update every time a node/interface's buffer is recomputed |
+| `GET /health` | Liveness |
+
 ## Injecting faults (precursor patterns for ML)
 
 Faults ramp **gradually** (`ramp_seconds`), hold at full effect
@@ -156,9 +165,9 @@ data/        topology.json (tracked) + drishti.db (generated, git-ignored)
 
 ## Notes for teammates
 
-- **ML** (`ml/README.md`): read `data/drishti.db` directly with pandas, or
-  import `backend/app/services/telemetry_service.py`. Inject faults to
-  generate labelled precursor windows.
+- **Predictive fault engine** (`ml/`, Phase 2): LightGBM classifier + regressor,
+  standalone FastAPI service (:8200), runs offline on buffered metrics. See
+  `ml/README.md` to generate training data via fault injection and train models.
 - **Network sim**: scenarios live in `simulator/sim/faults.py` — add a new
   scenario by adding a `SCENARIOS` entry, a branch in `modifiers_for`, and a
   `_tick_<name>` event emitter.
@@ -170,7 +179,7 @@ data/        topology.json (tracked) + drishti.db (generated, git-ignored)
 ## Roadmap
 
 1. ✅ Telemetry simulator + ingestion backend (this phase)
-2. Predictive fault engine (LSTM/LightGBM, time-to-impact)
+2. ✅ Predictive fault engine (LightGBM, time-to-impact)
 3. Graph cascade correlation (topology-aware RCA)
 4. Offline LLM copilot (Ollama Mistral 7B + ChromaDB RAG)
 5. Digital twin validation (Containerlab)
