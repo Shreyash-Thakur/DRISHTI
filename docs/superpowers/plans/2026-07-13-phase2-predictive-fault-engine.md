@@ -812,7 +812,7 @@ from pathlib import Path
 import lightgbm as lgb
 import pandas as pd
 from sklearn.metrics import mean_absolute_error, roc_auc_score
-from sklearn.model_selection import GroupShuffleSplit
+from sklearn.model_selection import GroupShuffleSplit, StratifiedGroupKFold
 
 from ml.config import get_settings
 from ml.features import feature_names
@@ -837,10 +837,22 @@ def _fault_run_group(df: pd.DataFrame) -> pd.Series:
 
 
 def train_classifier(df: pd.DataFrame) -> tuple[lgb.LGBMClassifier, float]:
+    """Uses StratifiedGroupKFold rather than GroupShuffleSplit: a plain group
+    shuffle split can — and with small group counts, will — land a holdout fold
+    containing only one class, which makes roc_auc_score undefined. Stratifying
+    by is_precursor while still respecting fault-run groups avoids that failure
+    mode for both the small synthetic test fixture and real (larger) datasets."""
     features = feature_names()
     groups = _fault_run_group(df)
-    splitter = GroupShuffleSplit(n_splits=1, test_size=0.25, random_state=0)
-    train_idx, test_idx = next(splitter.split(df, groups=groups))
+    splitter = StratifiedGroupKFold(n_splits=4, shuffle=True, random_state=0)
+    # With few groups, StratifiedGroupKFold's first fold can still land on a
+    # single-class holdout (whole-group assignment isn't perfectly balanced at
+    # this scale) — take the first fold that actually holds out both classes.
+    train_idx, test_idx = next(
+        (tr, te)
+        for tr, te in splitter.split(df, df["is_precursor"], groups=groups)
+        if df.iloc[te]["is_precursor"].nunique() > 1
+    )
     model = lgb.LGBMClassifier(n_estimators=200, random_state=0)
     model.fit(df.iloc[train_idx][features], df.iloc[train_idx]["is_precursor"])
     predictions = model.predict_proba(df.iloc[test_idx][features])[:, 1]
