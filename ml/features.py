@@ -79,6 +79,6 @@ def compute_features(
         features["event_severity_max_120s"] = 0.0
     else:
         features["event_count_120s"] = float(len(ev))
-        features["event_severity_max_120s"] = float(ev["severity"].map(SEVERITY_RANK).max())
+        features["event_severity_max_120s"] = float(ev["severity"].map(SEVERITY_RANK).fillna(0).max())
 
     return features

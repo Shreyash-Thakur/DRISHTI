@@ -1,3 +1,5 @@
+import math
+
 import pandas as pd
 
 from ml.features import compute_features, feature_names
@@ -61,3 +63,29 @@ def test_compute_features_ignores_rows_after_as_of():
     features = compute_features(metric_history, event_history, as_of)
     assert features is not None
     assert features["utilization_pct_120s_max"] == 10.0
+
+
+def test_compute_features_unmapped_severity_defaults_to_zero():
+    """Unrecognized severity values should default to rank 0 instead of NaN."""
+    as_of = pd.Timestamp("2026-07-13T00:02:00Z")
+    ts = pd.date_range(end=as_of, periods=25, freq="5s")
+    metric_history = pd.DataFrame({
+        "ts": ts,
+        "node_id": ["pe-east"] * 25,
+        "interface": ["TenGigE0/0/0"] * 25,
+        "utilization_pct": [10.0] * 25,
+        "latency_ms": [5.0] * 25,
+        "jitter_ms": [1.0] * 25,
+        "packet_loss_pct": [0.0] * 25,
+    })
+    # Event with unknown severity that is not in SEVERITY_RANK
+    event_history = pd.DataFrame({
+        "ts": [as_of - pd.Timedelta(seconds=10)],
+        "node_id": ["pe-east"],
+        "severity": ["unknown_sev"],
+    })
+    features = compute_features(metric_history, event_history, as_of)
+    assert features is not None
+    # event_severity_max_120s should be a finite float, not NaN
+    assert not math.isnan(features["event_severity_max_120s"])
+    assert features["event_severity_max_120s"] == 0.0
