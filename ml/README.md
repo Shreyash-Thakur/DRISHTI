@@ -19,7 +19,7 @@ Features are computed from a sliding window of interface metrics (utilization, l
 > aren't there. Skipping this step means the `ml` container just crash-loops.
 
 ```bash
-# 1. Generate labelled training data (simulates 3 scenarios × 6 nodes, ~30 min)
+# 1. Generate labelled training data (simulates 3 scenarios × 6 nodes, ~60 min)
 python -m ml.dataset.generate
 
 # 2. Train both models (saves to ml/models/)
