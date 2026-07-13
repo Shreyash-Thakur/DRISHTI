@@ -10,7 +10,10 @@ from ml.features import feature_names
 def synthetic_training_set() -> pd.DataFrame:
     """2 nodes x 2 runs x (baseline, ramp) phases x 5 rows = 40 rows, with 4
     distinct contiguous ramp blocks — enough distinct fault-run groups for
-    GroupShuffleSplit in ml/train.py to produce a safe train/test split."""
+    both splitters in ml/train.py to produce a safe train/test split:
+    StratifiedGroupKFold in train_classifier() (needs >1 class in the holdout
+    fold) and GroupShuffleSplit in train_regressor() (splits the ramp-only
+    subset)."""
     features = feature_names()
     rows = []
     ts = pd.Timestamp("2026-07-13T00:00:00Z")

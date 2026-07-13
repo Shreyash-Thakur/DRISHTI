@@ -17,7 +17,7 @@ Everything runs fully offline — zero outbound calls.
                                              ▼             ▼
                                       ┌────────────┐  ┌───────────────────┐
                                       │ frontend/  │  │ ml/  (Phase 2)    │
-                                      │ (Phase 6)  │  │ LSTM/LightGBM     │
+                                      │ (Phase 6)  │  │ LightGBM          │
                                       └────────────┘  │ precursor detect  │
                                                       └─────────┬─────────┘
                                                                 ▼
@@ -58,6 +58,18 @@ docker compose up --build
 > Air-gap note: the image build needs PyPI once. On the offline network,
 > build the images on a connected machine, `docker save`/`docker load` them,
 > then `docker compose up` works with zero connectivity.
+
+> **`ml/models/` prerequisite:** the `ml` container will crash-loop on a fresh
+> clone / first `docker compose up` — `ml/models/` is git-ignored and must be
+> populated before the service can start. From the repo root, with the
+> backend + simulator up, run once:
+> ```bash
+> python -m ml.dataset.generate   # ~30 min, generates labelled training data
+> python -m ml.train              # trains + saves models to ml/models/
+> ```
+> Only then will `ml`'s `Predictor` find `classifier.txt`/`regressor.txt`/
+> `features.json` instead of raising `FileNotFoundError` at startup. See
+> `ml/README.md` for details.
 
 ### Option B — Plain Python (recommended for dev)
 
@@ -157,7 +169,8 @@ curl -X POST localhost:8100/faults -H "Content-Type: application/json" \
 ```
 backend/     FastAPI app — routers → services → repository (SQLite)
 simulator/   Telemetry generator + fault-injection API
-ml/          Phase 2 placeholder — see ml/README.md for how to pull training data
+ml/          Phase 2 predictive fault engine (working) — LightGBM classifier +
+             regressor, standalone FastAPI service; see ml/README.md
 copilot/     Phase 4 placeholder — Ollama + RAG integration notes
 frontend/    Phase 6 placeholder — endpoints the dashboard will consume
 data/        topology.json (tracked) + drishti.db (generated, git-ignored)

@@ -12,6 +12,12 @@ Features are computed from a sliding window of interface metrics (utilization, l
 
 **Prerequisites:** simulator and backend running (see root `README.md`).
 
+> **Do steps 1–2 before starting the service, Docker included.** `ml/models/`
+> is git-ignored — on a fresh clone (or a fresh `docker compose up`) it's
+> empty, and `Predictor.__init__` (`ml/service/predictor.py`) fatally raises
+> `FileNotFoundError` if `classifier.txt`/`regressor.txt`/`features.json`
+> aren't there. Skipping this step means the `ml` container just crash-loops.
+
 ```bash
 # 1. Generate labelled training data (simulates 3 scenarios × 6 nodes, ~30 min)
 python -m ml.dataset.generate
