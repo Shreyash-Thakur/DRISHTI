@@ -13,6 +13,11 @@ data/*.db
 data/*.db-wal
 data/*.db-shm
 
+# ml artifacts (regenerable)
+ml/models/
+ml/dataset/*.parquet
+ml/dataset/manifest.json
+
 # IDE / OS
 .vscode/
 .idea/
