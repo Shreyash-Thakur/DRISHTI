@@ -113,6 +113,25 @@ curl "localhost:8000/events?minutes=60"
 Interactive API docs: **http://localhost:8000/docs** (backend) and
 **http://localhost:8100/docs** (simulator/fault API).
 
+### End-to-end demo (no services required)
+
+`scripts/pipeline_demo.py` runs the whole pipeline in one process on a built-in
+golden-path cascade — simulator events → ml precursor predictions → rca
+correlation (root cause + cascade) → copilot narrative — using the real
+topology, runbooks, and correlation code. It needs nothing running: if a local
+Ollama answers it writes the LLM narrative, otherwise the copilot degrades to
+its deterministic templated summary, so it always produces output on an
+air-gapped box.
+
+```bash
+python -m scripts.pipeline_demo          # human-readable, stage by stage
+python -m scripts.pipeline_demo --json   # + full result as JSON
+COPILOT_MODEL=qwen3:8b python -m scripts.pipeline_demo   # pick a pulled model
+```
+
+`tests/test_e2e_pipeline.py` asserts this same chain — the one test that
+exercises more than one service together.
+
 ## API reference
 
 ### Backend (`:8000`)
@@ -206,8 +225,10 @@ twin/        Phase 5 digital-twin generator (working) — topology.json →
              Containerlab .clab.yml + per-node FRR configs; see twin/README.md
 frontend/    Phase 6 operator dashboard (working) — self-contained static page
              (:8080) consuming all four services; see frontend/README.md
+scripts/     pipeline_demo.py — offline end-to-end golden-path demo across all layers
+tests/       test_e2e_pipeline.py — cross-service integration test (the rest live
+             per-service under <svc>/tests/)
 data/runbooks/  operator runbooks (tracked) the copilot retrieves over
-frontend/    Phase 6 placeholder — endpoints the dashboard will consume
 data/        topology.json (tracked) + drishti.db (generated, git-ignored)
 ```
 
