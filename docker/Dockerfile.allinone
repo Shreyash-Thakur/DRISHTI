@@ -1,0 +1,51 @@
+# All-in-one DRISHTI image: all five services + the static dashboard in one
+# container, launched by docker/supervisor.py. Build from the REPO ROOT so the
+# COPY paths below resolve:
+#
+#   docker build -f docker/Dockerfile.allinone -t drishti-allinone .
+#   docker run --rm -p 8080:8080 -p 8000:8000 -p 8100:8100 \
+#     -p 8200:8200 -p 8300:8300 -p 8400:8400 \
+#     --add-host=host.docker.internal:host-gateway drishti-allinone
+#
+# Everything talks over localhost inside the container (each service's default),
+# so no inter-service config is needed. Ollama still runs on the HOST; copilot
+# reaches it via host.docker.internal and degrades to a templated narrative if
+# it is absent.
+FROM python:3.11-slim
+
+# libgomp1 is LightGBM's OpenMP runtime dependency.
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY docker/requirements-allinone.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Each service package, placed as a top-level importable package under /app.
+COPY backend/app ./app
+COPY simulator/sim ./sim
+COPY ml ./ml
+COPY rca ./rca
+COPY copilot ./copilot
+
+# Shared source-of-truth data (topology + runbooks) and the dashboard.
+COPY data ./data
+COPY frontend/index.html ./frontend/index.html
+
+COPY docker/supervisor.py ./supervisor.py
+
+ENV DRISHTI_TOPOLOGY_PATH=/app/data/topology.json \
+    DRISHTI_DB_PATH=/app/data/drishti.db \
+    SIM_INTERVAL_SECONDS=5 \
+    ML_MODEL_DIR=/app/ml/models \
+    ML_DB_PATH=/app/data/drishti.db \
+    ML_TOPOLOGY_PATH=/app/data/topology.json \
+    RCA_TOPOLOGY_PATH=/app/data/topology.json \
+    COPILOT_RUNBOOKS_DIR=/app/data/runbooks \
+    COPILOT_OLLAMA_URL=http://host.docker.internal:11434
+
+# backend, simulator, ml, rca, copilot, dashboard
+EXPOSE 8000 8100 8200 8300 8400 8080
+
+CMD ["python", "-u", "supervisor.py"]

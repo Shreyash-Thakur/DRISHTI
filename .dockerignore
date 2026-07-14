@@ -1,0 +1,16 @@
+# Applies only to builds whose context is the repo root (the all-in-one image,
+# Dockerfile.allinone). The per-service compose builds use their own subdir as
+# context, so this file does not affect them.
+.venv/
+.git/
+.claude/
+.superpowers/
+docs/
+**/__pycache__/
+**/*.pyc
+**/tests/
+ml/dataset/
+**/*.db
+**/*.parquet
+*.egg-info/
+scratchpad/

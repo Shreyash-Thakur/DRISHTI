@@ -81,6 +81,35 @@ docker compose up --build
 > `features.json` instead of raising `FileNotFoundError` at startup. See
 > `ml/README.md` for details.
 
+### Option C — All-in-one single container
+
+For a portable demo / air-gapped box: one image runs all five services **and**
+the dashboard, launched by a tiny stdlib process supervisor
+(`docker/supervisor.py`). Everything talks over `localhost` inside the
+container, so there is no inter-service config.
+
+```bash
+# build from the repo root (bakes in ml/models if present)
+docker build -f docker/Dockerfile.allinone -t drishti-allinone .
+
+docker run --rm \
+  -p 8080:8080 -p 8000:8000 -p 8100:8100 -p 8200:8200 -p 8300:8300 -p 8400:8400 \
+  --add-host=host.docker.internal:host-gateway \
+  drishti-allinone
+```
+
+Then open the dashboard at **http://localhost:8080**. The supervisor waits for
+the backend to be healthy before starting the dependents and streams each
+service's logs with a `[name]` prefix. Unlike the compose `ml` service, a
+missing `ml/models/` here only disables predictions (ml is non-critical) — the
+container stays up and the rest of the pipeline still works. Ollama still runs
+on the host (reached via `host.docker.internal`); copilot degrades to a
+templated narrative if it is absent.
+
+> Air-gap: build once on a connected machine, then
+> `docker save drishti-allinone | gzip > drishti.tar.gz`, copy it over, and
+> `docker load < drishti.tar.gz` — a single artifact, zero connectivity.
+
 ### Option B — Plain Python (recommended for dev)
 
 Requires Python 3.11+. Two terminals, **both from the repo root**:
@@ -241,6 +270,8 @@ frontend/    Phase 6 operator dashboard (working) — self-contained static page
              (:8080) consuming all four services; see frontend/README.md
 scripts/     pipeline_demo.py — offline in-process golden-path demo; smoke.py —
              live-stack HTTP smoke test / post-deploy check
+docker/      Dockerfile.allinone + supervisor.py — single-container image running
+             all services (Option C); requirements-allinone.txt is their union
 tests/       test_e2e_pipeline.py — cross-service integration test (the rest live
              per-service under <svc>/tests/)
 data/runbooks/  operator runbooks (tracked) the copilot retrieves over
