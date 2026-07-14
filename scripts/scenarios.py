@@ -87,7 +87,9 @@ SCENARIOS: dict[str, dict] = {
     "resolve": {
         "description": "EDGE CASE: a short-lived fault that ramps, holds briefly, then "
                        "auto-expires — exercises the incident open -> resolve lifecycle.",
-        "expect": "An incident appears, then disappears from /incidents within ~30s.",
+        "expect": "An incident appears within ~10s; after the fault expires it auto-resolves "
+                  "as symptoms decay (RCA decay_tau=120s, so a few minutes) — or run "
+                  "`scenarios clear` to flush rca instantly.",
         "steps": [{"scenario": "congestion_ramp", "node": "pe-east",
                    "params": {"ramp_seconds": 6, "hold_seconds": 6}}],
     },
@@ -102,12 +104,18 @@ def list_scenarios() -> None:
         print(f"      expect: {s['expect']}\n")
 
 
-def clear_faults(sim_url: str) -> None:
+def clear_faults(sim_url: str, rca_url: str | None = None) -> None:
     try:
         r = httpx.request("DELETE", f"{sim_url}/faults", timeout=5.0)
         print(f"cleared faults: {r.json().get('cleared', '?')}")
     except Exception as exc:
         print(f"could not reach simulator at {sim_url}: {exc}")
+    if rca_url:  # also flush rca so lingering (decaying) incidents don't carry over
+        try:
+            r = httpx.post(f"{rca_url}/admin/reset", timeout=5.0)
+            print(f"reset rca: {r.json().get('cleared', '?')}")
+        except Exception as exc:
+            print(f"could not reset rca at {rca_url}: {exc}")
 
 
 def run_scenario(name: str, sim_url: str, rca_url: str, clear_first: bool, wait: float) -> int:
@@ -118,7 +126,7 @@ def run_scenario(name: str, sim_url: str, rca_url: str, clear_first: bool, wait:
 
     print(f"== {name} ==\n{scenario['description']}\nexpect: {scenario['expect']}\n")
     if clear_first:
-        clear_faults(sim_url)
+        clear_faults(sim_url, rca_url)
 
     with httpx.Client() as client:
         for i, step in enumerate(scenario["steps"], 1):
@@ -184,7 +192,7 @@ def main() -> int:
         list_scenarios()
         return 0
     if args.command == "clear":
-        clear_faults(args.sim)
+        clear_faults(args.sim, args.rca)
         return 0
     if not args.name:
         print("`run` needs a scenario name. Try: python -m scripts.scenarios list")

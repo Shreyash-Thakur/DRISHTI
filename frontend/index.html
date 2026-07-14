@@ -137,6 +137,15 @@
   #active-faults { margin: 10px 0 4px; font-size: 12px; }
   #active-faults .fault { color: var(--ink-2); }
   #active-faults .fault b { color: var(--warning); }
+  .tile .row { display: flex; align-items: center; gap: 8px; }
+  .tile .meter { flex: 1; }
+  svg.spark { flex: 0 0 auto; }
+  .eta-badge {
+    margin-left: auto; font-size: 11px; font-weight: 600; white-space: nowrap;
+    color: var(--warning); border: 1px solid var(--warning); border-radius: 999px; padding: 1px 8px;
+  }
+  h2 .toggle { float: right; font-size: 11px; font-weight: 400; color: var(--ink-2); cursor: pointer; }
+  h2 .toggle input { vertical-align: middle; }
 </style>
 </head>
 <body>
@@ -171,7 +180,9 @@
     <div id="incidents"><span class="empty">no active incidents</span></div>
   </section>
   <section class="panel" id="copilot-panel">
-    <h2>Copilot explanation</h2>
+    <h2>Copilot explanation
+      <label class="toggle"><input type="checkbox" id="autoexplain" checked> auto-explain</label>
+    </h2>
     <div id="copilot-meta"></div>
     <div id="copilot-out"><span class="empty">select "Explain" on an incident</span></div>
   </section>
@@ -290,29 +301,56 @@ function renderTopology(nodeState) {
 }
 
 // ---- predictions ----------------------------------------------------------
+// ml serves only the current snapshot, so we keep a short client-side history
+// per node/interface to visualise the (transient) precursor spike as a trend.
+const HIST_LEN = 40;
+const riskHistory = new Map();
+function recordRisk(key, prob) {
+  const h = riskHistory.get(key) || [];
+  h.push(prob);
+  if (h.length > HIST_LEN) h.shift();
+  riskHistory.set(key, h);
+  return h;
+}
+function sparkline(values) {
+  const w = 88, h = 22, n = values.length;
+  const svg = svgEl("svg", { class: "spark", viewBox: `0 0 ${w} ${h}`, width: w, height: h });
+  if (n < 2) return svg;
+  const peak = Math.max(0.001, ...values);
+  const pts = values.map((v, i) =>
+    `${(i / (n - 1) * w).toFixed(1)},${(h - (v / peak) * (h - 3) - 1.5).toFixed(1)}`).join(" ");
+  const cur = values[n - 1];
+  const stroke = cur >= 0.5 ? "var(--critical)" : cur >= 0.15 ? "var(--warning)" : "var(--seq)";
+  svg.append(svgEl("polyline", { points: pts, fill: "none", stroke, "stroke-width": 1.5 }));
+  return svg;
+}
 async function refreshPredictions() {
   const box = document.getElementById("predictions");
   const preds = await safeJson(`${SVC.ml}/predictions`);
   if (preds == null) { box.replaceChildren(el("span", { class: "empty" }, "ml service offline")); return; }
   const withProb = preds.filter((p) => typeof p.precursor_probability === "number");
   if (!withProb.length) { box.replaceChildren(el("span", { class: "empty" }, "no risk signals yet")); return; }
+  // record history for EVERY interface so trends persist even when one drops out of the top 8
+  for (const p of withProb) recordRisk(`${p.node_id}|${p.interface || ""}`, p.precursor_probability);
   withProb.sort((a, b) => b.precursor_probability - a.precursor_probability);
   box.replaceChildren(...withProb.slice(0, 8).map((p) => {
     const pct = Math.round(p.precursor_probability * 100);
     const eta = p.estimated_seconds_to_impact == null ? "—" : `${Math.round(p.estimated_seconds_to_impact)}s`;
     const meter = el("div", { class: "meter" });
     const fill = el("i"); fill.style.width = `${pct}%`; meter.append(fill);
+    const hist = riskHistory.get(`${p.node_id}|${p.interface || ""}`) || [];
     return el("div", { class: "tile" },
       el("div", { class: "row" },
         el("span", { class: "name" }, p.node_id, el("span", { class: "iface" }, ` ${p.interface || ""}`)),
         el("span", { class: "eta" }, `${pct}% · ETA ${eta}`)),
-      meter);
+      el("div", { class: "row" }, meter, sparkline(hist)));
   }));
   return withProb;
 }
 
 // ---- incidents ------------------------------------------------------------
 function severityRank(s) { return SEV.indexOf(s); }
+const autoExplained = new Set();
 async function refreshIncidents() {
   const box = document.getElementById("incidents");
   const incidents = await safeJson(`${SVC.rca}/incidents`);
@@ -323,6 +361,7 @@ async function refreshIncidents() {
     box.replaceChildren(el("span", { class: "empty" }, "no active incidents"));
   } else {
     box.replaceChildren(...incidents.map((inc) => renderIncident(inc, nodeState)));
+    maybeAutoExplain(incidents);
   }
   // fold predictions into topology tint too
   const preds = await refreshPredictions();
@@ -330,6 +369,24 @@ async function refreshIncidents() {
     if (p.precursor_probability >= 0.5 && !nodeState[p.node_id]) nodeState[p.node_id] = { severity: "warning" };
   }
   renderTopology(nodeState);
+}
+// Auto-explain the top incident the first time we see it, so the copilot
+// narrative is already on screen without a click. Deterministic incident ids
+// mean each is explained at most once.
+function maybeAutoExplain(incidents) {
+  if (!document.getElementById("autoexplain")?.checked) return;
+  const rank = (i) => severityRank(i.severity || "info");
+  const top = [...incidents].sort((a, b) => rank(b) - rank(a))[0];
+  if (top && !autoExplained.has(top.incident_id) && !explaining) {
+    autoExplained.add(top.incident_id);
+    explainIncident(top, null);
+  }
+}
+function incidentEta(inc) {
+  const etas = [];
+  for (const s of inc.symptoms || []) if (typeof s.estimated_seconds_to_impact === "number") etas.push(s.estimated_seconds_to_impact);
+  for (const c of inc.cascade || []) if (typeof c.estimated_seconds_to_impact === "number") etas.push(c.estimated_seconds_to_impact);
+  return etas.length ? Math.min(...etas) : null;
 }
 function renderIncident(inc, nodeState) {
   const rc = inc.root_cause || {};
@@ -340,10 +397,13 @@ function renderIncident(inc, nodeState) {
     if (nid && !nodeState[nid]) nodeState[nid] = { severity: "warning" };
   }
   const conf = typeof rc.confidence === "number" ? `${Math.round(rc.confidence * 100)}%` : "—";
+  const head = el("div", { class: "head" },
+    el("span", { class: `chip ${sev}` }, inc.severity || "info"),
+    el("span", { class: "rc", html: `root cause: <b>${rc.node_id ?? "?"}</b> · confidence ${conf}` }));
+  const eta = incidentEta(inc);
+  if (eta != null) head.append(el("span", { class: "eta-badge" }, `predicted impact in ~${Math.round(eta)}s`));
   const card = el("div", { class: "card" },
-    el("div", { class: "head" },
-      el("span", { class: `chip ${sev}` }, inc.severity || "info"),
-      el("span", { class: "rc", html: `root cause: <b>${rc.node_id ?? "?"}</b> · confidence ${conf}` })),
+    head,
     el("div", { class: "rationale" }, (rc.rationale || []).join(" · ")),
   );
   const cascade = inc.cascade || [];
@@ -360,9 +420,11 @@ function renderIncident(inc, nodeState) {
 }
 
 // ---- copilot --------------------------------------------------------------
+let explaining = false;
 async function explainIncident(inc, btn) {
   const meta = document.getElementById("copilot-meta");
   const out = document.getElementById("copilot-out");
+  explaining = true;
   if (btn) { btn.disabled = true; btn.textContent = "Explaining…"; }
   meta.textContent = `explaining ${inc.incident_id}…`;
   out.textContent = "";
@@ -370,6 +432,7 @@ async function explainIncident(inc, btn) {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ incident: inc }),
   });
+  explaining = false;
   if (btn) { btn.disabled = false; btn.textContent = "Explain"; }
   if (res == null) { meta.textContent = ""; out.replaceChildren(el("span", { class: "empty" }, "copilot service offline")); return; }
   const rbs = (res.retrieved_runbooks || []).map((r) => `${r.runbook}#${r.heading}`).join(", ");
@@ -450,7 +513,10 @@ async function injectFault() {
 async function clearFaults() {
   const status = document.getElementById("inj-status");
   await safeJson(`${SVC.simulator}/faults`, { method: "DELETE" });
-  status.textContent = "cleared all faults";
+  // also flush rca so lingering (decaying) incidents clear immediately
+  await safeJson(`${SVC.rca}/admin/reset`, { method: "POST" });
+  autoExplained.clear();
+  status.textContent = "cleared all faults + reset incidents";
   refreshFaults();
 }
 document.getElementById("inj-go").addEventListener("click", injectFault);

@@ -34,3 +34,13 @@ class RcaState:
 
     def get_incident(self, incident_id: str) -> dict | None:
         return self.incidents.get(incident_id)
+
+    def clear(self) -> dict[str, int]:
+        """Flush the event buffer, predictions and incidents. Used by the reset
+        endpoint so a demo can start from a clean slate instead of waiting out
+        the symptom decay (~decay_tau) after faults are removed."""
+        counts = {"events": len(self.events), "incidents": len(self.incidents)}
+        self.events.clear()
+        self.predictions = []
+        self.incidents = {}
+        return counts

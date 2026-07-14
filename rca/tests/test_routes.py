@@ -40,6 +40,18 @@ def test_incident_returns_seeded():
     assert response.json()["incident_id"] == "inc-1"
 
 
+def test_admin_reset_clears_events_and_incidents():
+    client = _client()
+    state = client.app.state.rca_state
+    state.add_event({"ts": "2026-07-14T00:00:00+00:00", "node_id": "pe-east", "severity": "error"},
+                    __import__("datetime").datetime(2026, 7, 14, tzinfo=__import__("datetime").timezone.utc))
+    state.set_incidents([{"incident_id": "inc-1", "status": "active"}])
+    response = client.post("/admin/reset")
+    assert response.status_code == 200
+    assert response.json()["cleared"] == {"events": 1, "incidents": 1}
+    assert client.get("/incidents").json() == []
+
+
 def test_ws_incidents_receives_broadcast():
     # `anyio.from_thread.run(...)` can't be used here — this test thread isn't an
     # AnyIO worker thread. The live portal bound to the route handler's event loop

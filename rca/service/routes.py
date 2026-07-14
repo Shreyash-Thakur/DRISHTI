@@ -12,6 +12,13 @@ async def health() -> dict:
     return {"status": "ok", "service": "drishti-rca"}
 
 
+@router.post("/admin/reset")
+async def reset(request: Request) -> dict:
+    """Flush the rolling event buffer + incidents so a demo can restart cleanly
+    without waiting out symptom decay. Pair with the simulator's DELETE /faults."""
+    return {"cleared": request.app.state.rca_state.clear()}
+
+
 @router.get("/incidents")
 async def all_incidents(request: Request) -> list[dict]:
     incidents = request.app.state.rca_state.all_incidents()
