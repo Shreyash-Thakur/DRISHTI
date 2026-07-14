@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRISHTI — NOC</title>
+<style>
+  /* Dark NOC theme by default; light via prefers-color-scheme. Palette values are
+     the dataviz reference instance (validated); status colors are always paired
+     with a text label, never color-alone. */
+  :root {
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --surface-2: #232321;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --hair: #2c2c2a;
+    --seq: #3987e5;          /* sequential blue — magnitude (probability) */
+    --ok: #0ca30c;
+    --info: #3987e5;
+    --warning: #fab219;
+    --error: #ec835a;        /* status "serious" */
+    --critical: #d03b3b;
+    --ring: #ffffff;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --page: #f9f9f7; --surface: #fcfcfb; --surface-2: #f0efec;
+      --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781; --hair: #e1e0d9;
+      --seq: #2a78d6; --ok: #0ca30c; --info: #2a78d6; --warning: #fab219;
+      --error: #ec835a; --critical: #d03b3b; --ring: #0b0b0b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--ink);
+    font: 14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    padding: 12px 20px; background: var(--surface); border-bottom: 1px solid var(--hair);
+    position: sticky; top: 0; z-index: 5;
+  }
+  header h1 { font-size: 16px; margin: 0; letter-spacing: 0.5px; }
+  header h1 span { color: var(--muted); font-weight: 400; }
+  .health { display: flex; gap: 14px; margin-left: auto; flex-wrap: wrap; }
+  .svc { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .dot.up { background: var(--ok); }
+  .dot.down { background: var(--critical); }
+  .cfg { font-size: 11px; color: var(--muted); padding: 6px 20px; background: var(--page); }
+  main {
+    display: grid; gap: 16px; padding: 16px 20px;
+    grid-template-columns: repeat(12, 1fr);
+  }
+  .panel {
+    background: var(--surface); border: 1px solid var(--hair); border-radius: 10px;
+    padding: 14px; min-height: 80px; overflow: hidden;
+  }
+  .panel > h2 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.8px;
+    color: var(--muted); margin: 0 0 12px;
+  }
+  #topology-panel { grid-column: span 7; }
+  #predictions-panel { grid-column: span 5; }
+  #incidents-panel { grid-column: span 7; }
+  #copilot-panel { grid-column: span 5; }
+  #events-panel { grid-column: span 12; }
+  @media (max-width: 900px) { main > .panel { grid-column: 1 / -1 !important; } }
+
+  svg { width: 100%; height: auto; display: block; }
+  .node-label { fill: var(--ink-2); font-size: 9px; }
+  .empty { color: var(--muted); font-style: italic; }
+
+  /* prediction tiles */
+  .tiles { display: grid; gap: 8px; }
+  .tile { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; }
+  .tile .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .tile .name { font-weight: 600; }
+  .tile .iface { color: var(--muted); font-size: 12px; }
+  .tile .eta { font-variant-numeric: tabular-nums; color: var(--ink-2); font-size: 12px; }
+  .meter { height: 8px; background: var(--hair); border-radius: 4px; margin-top: 6px; overflow: hidden; }
+  .meter > i { display: block; height: 100%; background: var(--seq); border-radius: 4px; }
+
+  /* severity chip / dot — always with a text label */
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.4px; padding: 2px 7px; border-radius: 20px;
+    background: var(--surface-2); color: var(--ink);
+  }
+  .chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .chip.ok::before { background: var(--ok); }
+  .chip.info::before { background: var(--info); }
+  .chip.warning::before { background: var(--warning); }
+  .chip.error::before { background: var(--error); }
+  .chip.critical::before { background: var(--critical); }
+
+  /* incident cards */
+  .card { background: var(--surface-2); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+  .card .head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .card .rc { font-weight: 600; }
+  .card .rc b { color: var(--critical); }
+  .card ul { margin: 6px 0 0; padding-left: 18px; color: var(--ink-2); }
+  .card .rationale { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
+  .card .cascade li { font-size: 12px; }
+  button {
+    font: inherit; font-size: 12px; cursor: pointer; margin-top: 8px;
+    background: var(--seq); color: #fff; border: none; border-radius: 6px; padding: 5px 12px;
+  }
+  button:disabled { opacity: 0.6; cursor: default; }
+
+  #copilot-out { white-space: pre-wrap; font-size: 13px; color: var(--ink); }
+  #copilot-meta { color: var(--muted); font-size: 11px; margin-bottom: 8px; }
+
+  /* event ticker */
+  #events { max-height: 240px; overflow-y: auto; }
+  .ev { display: flex; gap: 8px; align-items: baseline; padding: 3px 0; border-bottom: 1px solid var(--hair); font-size: 12px; }
+  .ev .evdot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; margin-top: 5px; background: var(--muted); }
+  .ev .evdot.info { background: var(--info); }
+  .ev .evdot.warning { background: var(--warning); }
+  .ev .evdot.error { background: var(--error); }
+  .ev .evdot.critical { background: var(--critical); }
+  .ev .ts { color: var(--muted); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+  .ev .node { color: var(--ink-2); font-weight: 600; flex: 0 0 auto; }
+  .ev .msg { color: var(--ink-2); }
+</style>
+</head>
+<body>
+<header>
+  <h1>DRISHTI <span>· Predictive NOC</span></h1>
+  <div class="health" id="health"></div>
+</header>
+<div class="cfg" id="cfg"></div>
+<main>
+  <section class="panel" id="topology-panel">
+    <h2>Topology</h2>
+    <div id="topology"><span class="empty">loading topology…</span></div>
+  </section>
+  <section class="panel" id="predictions-panel">
+    <h2>Predicted risk (ml)</h2>
+    <div id="predictions" class="tiles"><span class="empty">—</span></div>
+  </section>
+  <section class="panel" id="incidents-panel">
+    <h2>Incidents (RCA)</h2>
+    <div id="incidents"><span class="empty">no active incidents</span></div>
+  </section>
+  <section class="panel" id="copilot-panel">
+    <h2>Copilot explanation</h2>
+    <div id="copilot-meta"></div>
+    <div id="copilot-out"><span class="empty">select "Explain" on an incident</span></div>
+  </section>
+  <section class="panel" id="events-panel">
+    <h2>Live events</h2>
+    <div id="events"><span class="empty">waiting for telemetry…</span></div>
+  </section>
+</main>
+
+<script type="module">
+// ---- service config (query-param overridable) ----------------------------
+const qs = new URLSearchParams(location.search);
+const SVC = {
+  backend: qs.get("backend") || "http://localhost:8000",
+  ml: qs.get("ml") || "http://localhost:8200",
+  rca: qs.get("rca") || "http://localhost:8300",
+  copilot: qs.get("copilot") || "http://localhost:8400",
+};
+document.getElementById("cfg").textContent =
+  `backend ${SVC.backend} · ml ${SVC.ml} · rca ${SVC.rca} · copilot ${SVC.copilot}`;
+
+// ---- tiny DOM helper ------------------------------------------------------
+function el(tag, props = {}, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === "class") n.className = v;
+    else if (k === "html") n.innerHTML = v;
+    else if (k.startsWith("on") && typeof v === "function") n.addEventListener(k.slice(2), v);
+    else n.setAttribute(k, v);
+  }
+  for (const kid of kids) n.append(kid?.nodeType ? kid : document.createTextNode(kid ?? ""));
+  return n;
+}
+const SEV = ["info", "warning", "error", "critical"];
+const sevClass = (s) => (SEV.includes(s) ? s : "info");
+
+async function safeJson(url, opts = {}) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 4000);
+  try {
+    const r = await fetch(url, { ...opts, signal: ctl.signal });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+// ---- health strip ---------------------------------------------------------
+const HEALTH = document.getElementById("health");
+function renderHealth(states) {
+  HEALTH.replaceChildren(
+    ...Object.entries(states).map(([name, up]) =>
+      el("div", { class: "svc" }, el("span", { class: `dot ${up ? "up" : "down"}` }), name)),
+  );
+}
+async function pollHealth() {
+  const names = Object.keys(SVC);
+  const results = await Promise.all(names.map((n) => safeJson(`${SVC[n]}/health`)));
+  renderHealth(Object.fromEntries(names.map((n, i) => [n, results[i] != null])));
+}
+
+// ---- topology map ---------------------------------------------------------
+const POS = {
+  "ce-site-a": [45, 60], "ce-site-b": [45, 190],
+  "pe-east": [190, 60], "pe-west": [190, 190],
+  "p-core-1": [345, 60], "p-core-2": [345, 190],
+};
+const SVGNS = "http://www.w3.org/2000/svg";
+function svgEl(tag, attrs) {
+  const n = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+  return n;
+}
+let TOPOLOGY = null;
+async function loadTopology() {
+  const topo = await safeJson(`${SVC.backend}/topology`);
+  if (!topo) return;
+  TOPOLOGY = topo;
+  renderTopology({});
+}
+function renderTopology(nodeState) {
+  if (!TOPOLOGY) return;
+  const svg = svgEl("svg", { viewBox: "0 0 390 250", role: "img" });
+  for (const link of TOPOLOGY.links || []) {
+    const a = POS[link.a?.node], b = POS[link.b?.node];
+    if (!a || !b) continue;
+    svg.append(svgEl("line", {
+      x1: a[0], y1: a[1], x2: b[0], y2: b[1],
+      stroke: "var(--hair)", "stroke-width": link.kind === "core" ? 3 : 1.5,
+    }));
+  }
+  for (const node of TOPOLOGY.nodes || []) {
+    const p = POS[node.id];
+    if (!p) continue;
+    const st = nodeState[node.id] || {};
+    const fill = st.severity ? `var(--${sevClass(st.severity)})` : "var(--surface-2)";
+    if (st.root) {
+      svg.append(svgEl("circle", { cx: p[0], cy: p[1], r: 18, fill: "none",
+        stroke: "var(--ring)", "stroke-width": 2 }));
+    }
+    svg.append(svgEl("circle", { cx: p[0], cy: p[1], r: 13, fill,
+      stroke: "var(--hair)", "stroke-width": 1 }));
+    const label = svgEl("text", { x: p[0], y: p[1] + 28, "text-anchor": "middle", class: "node-label" });
+    label.textContent = node.id;
+    svg.append(label);
+  }
+  document.getElementById("topology").replaceChildren(svg);
+}
+
+// ---- predictions ----------------------------------------------------------
+async function refreshPredictions() {
+  const box = document.getElementById("predictions");
+  const preds = await safeJson(`${SVC.ml}/predictions`);
+  if (preds == null) { box.replaceChildren(el("span", { class: "empty" }, "ml service offline")); return; }
+  const withProb = preds.filter((p) => typeof p.precursor_probability === "number");
+  if (!withProb.length) { box.replaceChildren(el("span", { class: "empty" }, "no risk signals yet")); return; }
+  withProb.sort((a, b) => b.precursor_probability - a.precursor_probability);
+  box.replaceChildren(...withProb.slice(0, 8).map((p) => {
+    const pct = Math.round(p.precursor_probability * 100);
+    const eta = p.estimated_seconds_to_impact == null ? "—" : `${Math.round(p.estimated_seconds_to_impact)}s`;
+    const meter = el("div", { class: "meter" });
+    const fill = el("i"); fill.style.width = `${pct}%`; meter.append(fill);
+    return el("div", { class: "tile" },
+      el("div", { class: "row" },
+        el("span", { class: "name" }, p.node_id, el("span", { class: "iface" }, ` ${p.interface || ""}`)),
+        el("span", { class: "eta" }, `${pct}% · ETA ${eta}`)),
+      meter);
+  }));
+  return withProb;
+}
+
+// ---- incidents ------------------------------------------------------------
+function severityRank(s) { return SEV.indexOf(s); }
+async function refreshIncidents() {
+  const box = document.getElementById("incidents");
+  const incidents = await safeJson(`${SVC.rca}/incidents`);
+  const nodeState = {};
+  if (incidents == null) {
+    box.replaceChildren(el("span", { class: "empty" }, "rca service offline"));
+  } else if (!incidents.length) {
+    box.replaceChildren(el("span", { class: "empty" }, "no active incidents"));
+  } else {
+    box.replaceChildren(...incidents.map((inc) => renderIncident(inc, nodeState)));
+  }
+  // fold predictions into topology tint too
+  const preds = await refreshPredictions();
+  for (const p of preds || []) {
+    if (p.precursor_probability >= 0.5 && !nodeState[p.node_id]) nodeState[p.node_id] = { severity: "warning" };
+  }
+  renderTopology(nodeState);
+}
+function renderIncident(inc, nodeState) {
+  const rc = inc.root_cause || {};
+  const sev = sevClass(inc.severity);
+  if (rc.node_id) nodeState[rc.node_id] = { severity: sev, root: true };
+  for (const c of inc.cascade || []) {
+    const nid = c.node_id || (c.anchor_type === "node" ? c.anchor_id : null);
+    if (nid && !nodeState[nid]) nodeState[nid] = { severity: "warning" };
+  }
+  const conf = typeof rc.confidence === "number" ? `${Math.round(rc.confidence * 100)}%` : "—";
+  const card = el("div", { class: "card" },
+    el("div", { class: "head" },
+      el("span", { class: `chip ${sev}` }, inc.severity || "info"),
+      el("span", { class: "rc", html: `root cause: <b>${rc.node_id ?? "?"}</b> · confidence ${conf}` })),
+    el("div", { class: "rationale" }, (rc.rationale || []).join(" · ")),
+  );
+  const cascade = inc.cascade || [];
+  if (cascade.length) {
+    const ul = el("ul", { class: "cascade" });
+    for (const c of cascade.slice(0, 6)) {
+      ul.append(el("li", {}, `${c.anchor_type} ${c.anchor_id} (+${c.hops_from_root}h) — ${c.at_risk_reason || ""}`));
+    }
+    card.append(ul);
+  }
+  const btn = el("button", { onclick: () => explainIncident(inc, btn) }, "Explain");
+  card.append(btn);
+  return card;
+}
+
+// ---- copilot --------------------------------------------------------------
+async function explainIncident(inc, btn) {
+  const meta = document.getElementById("copilot-meta");
+  const out = document.getElementById("copilot-out");
+  if (btn) { btn.disabled = true; btn.textContent = "Explaining…"; }
+  meta.textContent = `explaining ${inc.incident_id}…`;
+  out.textContent = "";
+  const res = await safeJson(`${SVC.copilot}/explain`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ incident: inc }),
+  });
+  if (btn) { btn.disabled = false; btn.textContent = "Explain"; }
+  if (res == null) { meta.textContent = ""; out.replaceChildren(el("span", { class: "empty" }, "copilot service offline")); return; }
+  const rbs = (res.retrieved_runbooks || []).map((r) => `${r.runbook}#${r.heading}`).join(", ");
+  meta.textContent = `${inc.incident_id} · model ${res.model} · ${res.llm_available ? "LLM" : "templated fallback"}`
+    + (rbs ? ` · runbooks: ${rbs}` : "");
+  out.textContent = res.narrative || "(no narrative)";
+}
+
+// ---- live events ----------------------------------------------------------
+const EVENTS = document.getElementById("events");
+const evBuf = [];
+function pushEvent(ev) {
+  evBuf.unshift(ev);
+  if (evBuf.length > 50) evBuf.pop();
+  EVENTS.replaceChildren(...evBuf.map((e) => el("div", { class: "ev" },
+    el("span", { class: `evdot ${sevClass(e.severity)}` }),
+    el("span", { class: "ts" }, (e.ts || "").slice(11, 19)),
+    el("span", { class: "node" }, e.node_id || ""),
+    el("span", { class: "msg" }, e.message || ""))));
+}
+let ws = null, wsBackoff = 1, pollTimer = null;
+function connectEvents() {
+  const url = SVC.backend.replace(/^http/, "ws") + "/ws/live";
+  try { ws = new WebSocket(url); } catch { schedulePoll(); return; }
+  ws.onopen = () => { wsBackoff = 1; if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } };
+  ws.onmessage = (m) => {
+    try {
+      const data = JSON.parse(m.data);
+      if (data.type === "telemetry") for (const ev of data.batch?.events || []) pushEvent(ev);
+    } catch { /* ignore malformed frame */ }
+  };
+  ws.onclose = () => { schedulePoll(); setTimeout(connectEvents, wsBackoff * 1000); wsBackoff = Math.min(wsBackoff * 2, 30); };
+  ws.onerror = () => { try { ws.close(); } catch { /* noop */ } };
+}
+function schedulePoll() {
+  if (pollTimer) return;
+  const poll = async () => {
+    const res = await safeJson(`${SVC.backend}/events?minutes=5`);
+    for (const ev of (res?.events || []).slice().reverse()) pushEvent(ev);
+  };
+  poll();
+  pollTimer = setInterval(poll, 5000);
+}
+
+// ---- boot -----------------------------------------------------------------
+loadTopology();
+pollHealth();
+refreshIncidents();
+setInterval(pollHealth, 5000);
+setInterval(refreshIncidents, 5000);
+connectEvents();
+</script>
+</body>
+</html>
