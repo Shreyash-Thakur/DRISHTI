@@ -73,11 +73,23 @@ def _windows_close(a: Symptom, b: Symptom, window: float) -> bool:
     return (latest_start - earliest_end).total_seconds() <= window
 
 
-def _cluster(symptoms: list[Symptom], window: float) -> list[list[Symptom]]:
+def _topologically_close(a: Symptom, b: Symptom, graph: Graph, max_hops: int) -> bool:
+    """Two symptoms can belong to the same incident only if one could plausibly
+    cascade to the other — i.e. their anchors are within `max_hops` in the graph.
+    Without this gate, two unrelated faults that merely coincide in time get
+    merged into a single incident with a bogus shared root cause."""
+    hops = graph.anchor_hops(a.anchor_type, a.anchor_id, b.anchor_type, b.anchor_id)
+    return hops is not None and hops <= max_hops
+
+
+def _cluster(
+    symptoms: list[Symptom], window: float, graph: Graph, max_hops: int,
+) -> list[list[Symptom]]:
     parent = list(range(len(symptoms)))
     for i in range(len(symptoms)):
         for j in range(i + 1, len(symptoms)):
-            if _windows_close(symptoms[i], symptoms[j], window):
+            if (_windows_close(symptoms[i], symptoms[j], window)
+                    and _topologically_close(symptoms[i], symptoms[j], graph, max_hops)):
                 parent[_find(parent, i)] = _find(parent, j)
     groups: dict[int, list[Symptom]] = {}
     for i, symptom in enumerate(symptoms):
@@ -228,7 +240,8 @@ def correlate(
         return []
     incidents = [
         _build_incident(group, graph, settings, node_impact_estimates or {})
-        for group in _cluster(active, settings.temporal_window_seconds)
+        for group in _cluster(active, settings.temporal_window_seconds,
+                              graph, settings.cascade_max_hops)
     ]
     incidents.sort(key=lambda i: i.opened_at, reverse=True)
     return incidents
