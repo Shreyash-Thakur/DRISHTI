@@ -34,8 +34,10 @@ Everything runs fully offline — zero outbound calls.
 
 **Phases 1–4 working now:** simulator → backend → SQLite + live WS (P1);
 LightGBM predictive fault engine `ml/` :8200 (P2); topology-aware cascade RCA
-`rca/` :8300 (P3); offline LLM copilot `copilot/` :8400 (P4). Phases 5–6
-(digital twin, dashboard) have placeholder packages with integration notes.
+`rca/` :8300 (P3); offline LLM copilot `copilot/` :8400 (P4); Containerlab
+digital-twin generator `twin/` (P5, generation offline-tested; live deploy needs
+the containerlab toolchain). Phase 6 (React dashboard) is a placeholder consuming
+the services above.
 
 ## Topology
 
@@ -199,6 +201,8 @@ rca/         Phase 3 topology-aware RCA (working) — pure-Python graph correlat
              (:8300); see rca/README.md
 copilot/     Phase 4 offline LLM copilot (working) — local Ollama + TF-IDF runbook
              RAG, standalone FastAPI service (:8400); see copilot/README.md
+twin/        Phase 5 digital-twin generator (working) — topology.json →
+             Containerlab .clab.yml + per-node FRR configs; see twin/README.md
 data/runbooks/  operator runbooks (tracked) the copilot retrieves over
 frontend/    Phase 6 placeholder — endpoints the dashboard will consume
 data/        topology.json (tracked) + drishti.db (generated, git-ignored)
@@ -217,6 +221,10 @@ data/        topology.json (tracked) + drishti.db (generated, git-ignored)
   operator narrative via a local Ollama LLM + TF-IDF retrieval over
   `data/runbooks/` (:8400), fully offline. Model-agnostic (`COPILOT_MODEL`); needs
   a local Ollama server. See `copilot/README.md`.
+- **Digital twin** (`twin/`, Phase 5): generates a Containerlab lab + FRR configs
+  from `data/topology.json` (`python -m twin.generate`) to stand the network up as
+  real routers for fix validation. Generation is offline + tested; live
+  `containerlab deploy` needs the containerlab toolchain. See `twin/README.md`.
 - **Network sim**: scenarios live in `simulator/sim/faults.py` — add a new
   scenario by adding a `SCENARIOS` entry, a branch in `modifiers_for`, and a
   `_tick_<name>` event emitter.
@@ -231,5 +239,5 @@ data/        topology.json (tracked) + drishti.db (generated, git-ignored)
 2. ✅ Predictive fault engine (LightGBM, time-to-impact)
 3. ✅ Graph cascade correlation (topology-aware RCA)
 4. ✅ Offline LLM copilot (Ollama + local runbook RAG)
-5. Digital twin validation (Containerlab)
+5. ✅ Digital twin generator (Containerlab lab + FRR configs; live deploy needs the containerlab toolchain)
 6. Operator dashboard (React)
