@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -204,7 +205,7 @@ async def main() -> None:
         print(f"  {line}")
     print()
 
-    if "--json" in __import__("sys").argv:
+    if "--json" in sys.argv:
         print(_rule("raw JSON"))
         print(json.dumps(result, indent=2, default=str))
 
