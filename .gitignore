@@ -18,6 +18,9 @@ ml/models/
 ml/dataset/*.parquet
 ml/dataset/manifest.json
 
+# twin generated lab (regenerable)
+twin/lab/
+
 # IDE / OS
 .vscode/
 .idea/
