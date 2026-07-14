@@ -132,6 +132,20 @@ COPILOT_MODEL=qwen3:8b python -m scripts.pipeline_demo   # pick a pulled model
 `tests/test_e2e_pipeline.py` asserts this same chain — the one test that
 exercises more than one service together.
 
+### Live-stack smoke test (services must be up)
+
+Where the demo above is in-process, `scripts/smoke.py` drives the real HTTP
+wiring against a **running** stack: it health-checks every service, injects a
+fast-ramping fault at the simulator, waits for rca to correlate an incident from
+the resulting `simulator → backend → rca` event stream, then has copilot explain
+that incident *by id* (forcing the copilot → rca fetch). It prints PASS/FAIL per
+step and exits non-zero on failure, so it also works as a post-deploy check.
+
+```bash
+python -m scripts.smoke                 # localhost defaults, ml/frontend optional
+python -m scripts.smoke --timeout 120   # allow longer for the fault to ramp
+```
+
 ## API reference
 
 ### Backend (`:8000`)
@@ -225,7 +239,8 @@ twin/        Phase 5 digital-twin generator (working) — topology.json →
              Containerlab .clab.yml + per-node FRR configs; see twin/README.md
 frontend/    Phase 6 operator dashboard (working) — self-contained static page
              (:8080) consuming all four services; see frontend/README.md
-scripts/     pipeline_demo.py — offline end-to-end golden-path demo across all layers
+scripts/     pipeline_demo.py — offline in-process golden-path demo; smoke.py —
+             live-stack HTTP smoke test / post-deploy check
 tests/       test_e2e_pipeline.py — cross-service integration test (the rest live
              per-service under <svc>/tests/)
 data/runbooks/  operator runbooks (tracked) the copilot retrieves over
