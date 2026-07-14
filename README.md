@@ -22,17 +22,20 @@ Everything runs fully offline — zero outbound calls.
                                                       └─────────┬─────────┘
                                                                 ▼
                                       ┌────────────┐  ┌───────────────────┐
-                                      │ rca/ (P3)  │  │ copilot/ (Phase 4)│
-                                      │ topology   │─▶│ Ollama + RAG      │
-                                      │ cascade RCA│  └─────────┬─────────┘
-                                      │  :8300     │            ▼
-                                      └────────────┘  ┌───────────────────┐
+                                      │ rca/ (P3)  │  │ copilot/ (P4)     │
+                                      │ topology   │─▶│ Ollama + runbook  │
+                                      │ cascade RCA│  │ RAG  :8400        │
+                                      │  :8300     │  └─────────┬─────────┘
+                                      └────────────┘            ▼
+                                                      ┌───────────────────┐
                                                       │ digital twin (P5) │
                                                       └───────────────────┘
 ```
 
-**Phase 1 (this repo, working now):** simulator → backend → SQLite + live WS.
-Phases 2–6 have placeholder packages with integration notes in their READMEs.
+**Phases 1–4 working now:** simulator → backend → SQLite + live WS (P1);
+LightGBM predictive fault engine `ml/` :8200 (P2); topology-aware cascade RCA
+`rca/` :8300 (P3); offline LLM copilot `copilot/` :8400 (P4). Phases 5–6
+(digital twin, dashboard) have placeholder packages with integration notes.
 
 ## Topology
 
@@ -148,6 +151,13 @@ Interactive API docs: **http://localhost:8000/docs** (backend) and
 | `WS /ws/incidents` | Pushes an incident update whenever one opens, changes, or resolves |
 | `GET /health` | Liveness |
 
+### copilot / RCA explainer (`:8400`)
+
+| Endpoint | Description |
+|---|---|
+| `POST /explain` | Body `{"incident_id": "..."}` (fetched from rca) or `{"incident": {...}}`. Returns a grounded root-cause narrative + the runbooks it used. Needs a local Ollama server + a pulled chat model; degrades to a templated summary (HTTP 200, `llm_available:false`) if Ollama is down |
+| `GET /health` | Liveness |
+
 ## Injecting faults (precursor patterns for ML)
 
 Faults ramp **gradually** (`ramp_seconds`), hold at full effect
@@ -187,7 +197,9 @@ ml/          Phase 2 predictive fault engine (working) — LightGBM classifier +
 rca/         Phase 3 topology-aware RCA (working) — pure-Python graph correlation,
              root-cause scoring + cascade prediction, standalone FastAPI service
              (:8300); see rca/README.md
-copilot/     Phase 4 placeholder — Ollama + RAG integration notes
+copilot/     Phase 4 offline LLM copilot (working) — local Ollama + TF-IDF runbook
+             RAG, standalone FastAPI service (:8400); see copilot/README.md
+data/runbooks/  operator runbooks (tracked) the copilot retrieves over
 frontend/    Phase 6 placeholder — endpoints the dashboard will consume
 data/        topology.json (tracked) + drishti.db (generated, git-ignored)
 ```
@@ -201,6 +213,10 @@ data/        topology.json (tracked) + drishti.db (generated, git-ignored)
   standalone FastAPI service (:8300). Correlates events (+ optional Phase 2
   predictions) into incidents with a ranked root cause and predicted blast radius;
   deterministic pure-Python graph heuristics, no extra ML deps. See `rca/README.md`.
+- **Offline copilot** (`copilot/`, Phase 4): explains an rca incident as an
+  operator narrative via a local Ollama LLM + TF-IDF retrieval over
+  `data/runbooks/` (:8400), fully offline. Model-agnostic (`COPILOT_MODEL`); needs
+  a local Ollama server. See `copilot/README.md`.
 - **Network sim**: scenarios live in `simulator/sim/faults.py` — add a new
   scenario by adding a `SCENARIOS` entry, a branch in `modifiers_for`, and a
   `_tick_<name>` event emitter.
@@ -214,6 +230,6 @@ data/        topology.json (tracked) + drishti.db (generated, git-ignored)
 1. ✅ Telemetry simulator + ingestion backend (this phase)
 2. ✅ Predictive fault engine (LightGBM, time-to-impact)
 3. ✅ Graph cascade correlation (topology-aware RCA)
-4. Offline LLM copilot (Ollama Mistral 7B + ChromaDB RAG)
+4. ✅ Offline LLM copilot (Ollama + local runbook RAG)
 5. Digital twin validation (Containerlab)
 6. Operator dashboard (React)

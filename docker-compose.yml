@@ -64,3 +64,24 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+
+  copilot:
+    build: ./copilot
+    container_name: drishti-copilot
+    ports:
+      - "8400:8400"
+    environment:
+      # Ollama runs on the HOST (not in compose). On Docker Desktop
+      # host.docker.internal resolves to the host; on Linux add the extra_hosts
+      # mapping below (host-gateway) to reach it.
+      COPILOT_OLLAMA_URL: http://host.docker.internal:11434
+      COPILOT_MODEL: mistral:7b
+      COPILOT_RCA_URL: http://rca:8300
+      COPILOT_RUNBOOKS_DIR: /data/runbooks
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./data:/data
+    depends_on:
+      backend:
+        condition: service_healthy
