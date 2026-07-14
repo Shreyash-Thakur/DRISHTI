@@ -9,6 +9,7 @@ from datetime import timedelta
 
 import httpx
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from rca.config import get_settings
 from rca.graph import Graph
@@ -59,6 +60,9 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     app = FastAPI(title="drishti-rca", lifespan=lifespan)
+    app.add_middleware(
+        CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
+    )
     app.include_router(router)
     return app
 
