@@ -214,6 +214,7 @@ python -m scripts.smoke --timeout 120   # allow longer for the fault to ramp
 | `GET /incidents` | Current correlated incidents (active first, newest first), each with a ranked root cause + predicted cascade |
 | `GET /incidents/{incident_id}` | One incident by id |
 | `WS /ws/incidents` | Pushes an incident update whenever one opens, changes, or resolves |
+| `POST /admin/reset` | Flush the event buffer + incidents (clean-slate reset for demos, so incidents don't linger through symptom decay) |
 | `GET /health` | Liveness |
 
 ### copilot / RCA explainer (`:8400`)
@@ -251,6 +252,32 @@ curl -X POST localhost:8100/faults -H "Content-Type: application/json" \
 | `congestion_ramp` | Utilization climbs (default +45 %); latency/jitter/loss follow once the link runs hot | High-util warning at 50 %, queue-drop error at 90 % of ramp |
 | `bgp_flap_precursor` | Jitter creep + slight loss | Keepalive-delay/hold-timer warnings at accelerating cadence, then a down/up flap burst |
 | `link_degradation` | Packet loss ramps to `max_loss_pct`, jitter ×3 | CRC/input-error syslogs, accelerating |
+
+## Edge-case simulations you can run
+
+The dashboard has a **Fault injection** panel (pick scenario + node → Inject),
+and `scripts/scenarios.py` provides a catalog of named, one-command scenarios —
+including adversarial edge cases — to exercise the whole pipeline against a live
+stack:
+
+```bash
+python -m scripts.scenarios list
+python -m scripts.scenarios run dual-independent --wait 25   # 2 distant faults -> must stay 2 incidents
+python -m scripts.scenarios run cascade-core-then-edge       # staggered core -> edge cascade
+python -m scripts.scenarios run resolve --wait 20            # incident open -> auto-resolve lifecycle
+python -m scripts.scenarios clear                            # flush faults + reset rca
+```
+
+`--wait N` polls rca and prints the resulting incidents, so a scenario doubles
+as an integration check. Highlights:
+
+| Scenario | What it stresses | Expected |
+|---|---|---|
+| `dual-independent` | topological clustering | ce-site-a and ce-site-b are 4 hops apart → **two separate incidents**, not one merged |
+| `dual-core` | adjacent multi-symptom | both cores (adjacent) → **one** incident spanning them |
+| `cascade-core-then-edge` | precursor → impact ordering | core degrades first → rooted at the core, edge folded into the cascade |
+| `storm` | multi-symptom correlation | network-wide faults, all within `cascade_max_hops` of the core → one large incident |
+| `resolve` | open → resolve lifecycle | incident appears, then auto-resolves as symptoms decay (or `clear` to flush instantly) |
 
 ## Repo layout
 

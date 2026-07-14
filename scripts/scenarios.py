@@ -75,8 +75,11 @@ SCENARIOS: dict[str, dict] = {
     },
     "storm": {
         "description": "EDGE CASE: simultaneous faults across the whole network "
-                       "(both cores + both edges).",
-        "expect": "Multiple incidents; the correlator must not collapse them into one.",
+                       "(both cores + both edges). Stresses multi-symptom correlation.",
+        "expect": "In this tight 6-node core network every faulted node is within "
+                  "cascade_max_hops of the core, so they correctly correlate into ONE "
+                  "large incident rooted at the core (contrast dual-independent, whose "
+                  "leaves are 4 hops apart and stay separate).",
         "steps": [
             {"scenario": "link_degradation", "node": "p-core-1", "params": _PERSIST},
             {"scenario": "congestion_ramp", "node": "pe-east", "params": _PERSIST},
