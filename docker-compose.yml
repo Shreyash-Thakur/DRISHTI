@@ -85,3 +85,16 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+
+  frontend:
+    image: python:3.11-slim
+    container_name: drishti-frontend
+    working_dir: /site
+    command: python -m http.server 8080
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./frontend:/site
+    depends_on:
+      backend:
+        condition: service_healthy

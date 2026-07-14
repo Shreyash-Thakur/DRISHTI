@@ -17,8 +17,8 @@ Everything runs fully offline — zero outbound calls.
                                              ▼             ▼
                                       ┌────────────┐  ┌───────────────────┐
                                       │ frontend/  │  │ ml/  (Phase 2)    │
-                                      │ (Phase 6)  │  │ LightGBM          │
-                                      └────────────┘  │ precursor detect  │
+                                      │ dashboard  │  │ LightGBM          │
+                                      │ (P6) :8080 │  │ precursor detect  │
                                                       └─────────┬─────────┘
                                                                 ▼
                                       ┌────────────┐  ┌───────────────────┐
@@ -36,8 +36,9 @@ Everything runs fully offline — zero outbound calls.
 LightGBM predictive fault engine `ml/` :8200 (P2); topology-aware cascade RCA
 `rca/` :8300 (P3); offline LLM copilot `copilot/` :8400 (P4); Containerlab
 digital-twin generator `twin/` (P5, generation offline-tested; live deploy needs
-the containerlab toolchain). Phase 6 (React dashboard) is a placeholder consuming
-the services above.
+the containerlab toolchain); and a self-contained operator dashboard `frontend/`
+:8080 (P6). **All six roadmap phases are now implemented** (offline-forced
+deviations in P4–P6 are documented in each package's design spec).
 
 ## Topology
 
@@ -203,6 +204,8 @@ copilot/     Phase 4 offline LLM copilot (working) — local Ollama + TF-IDF run
              RAG, standalone FastAPI service (:8400); see copilot/README.md
 twin/        Phase 5 digital-twin generator (working) — topology.json →
              Containerlab .clab.yml + per-node FRR configs; see twin/README.md
+frontend/    Phase 6 operator dashboard (working) — self-contained static page
+             (:8080) consuming all four services; see frontend/README.md
 data/runbooks/  operator runbooks (tracked) the copilot retrieves over
 frontend/    Phase 6 placeholder — endpoints the dashboard will consume
 data/        topology.json (tracked) + drishti.db (generated, git-ignored)
@@ -228,8 +231,9 @@ data/        topology.json (tracked) + drishti.db (generated, git-ignored)
 - **Network sim**: scenarios live in `simulator/sim/faults.py` — add a new
   scenario by adding a `SCENARIOS` entry, a branch in `modifiers_for`, and a
   `_tick_<name>` event emitter.
-- **Frontend** (`frontend/README.md`): consume the four GET endpoints + the
-  WS feed; CORS is open.
+- **Dashboard** (`frontend/`, Phase 6): self-contained static page (`:8080`, no
+  build) consuming all four services + the `/ws/live` feed; CORS is open on every
+  service. See `frontend/README.md`.
 - **Storage**: plain SQLite in WAL mode, no ORM — schema in
   `backend/app/repository/db.py`.
 
@@ -240,4 +244,4 @@ data/        topology.json (tracked) + drishti.db (generated, git-ignored)
 3. ✅ Graph cascade correlation (topology-aware RCA)
 4. ✅ Offline LLM copilot (Ollama + local runbook RAG)
 5. ✅ Digital twin generator (Containerlab lab + FRR configs; live deploy needs the containerlab toolchain)
-6. Operator dashboard (React)
+6. ✅ Operator dashboard (self-contained static page, no build)
