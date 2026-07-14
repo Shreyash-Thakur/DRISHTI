@@ -48,3 +48,19 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+
+  rca:
+    build: ./rca
+    container_name: drishti-rca
+    ports:
+      - "8300:8300"
+    environment:
+      RCA_BACKEND_WS_URL: ws://backend:8000/ws/live
+      RCA_BACKEND_HTTP_URL: http://backend:8000
+      RCA_ML_URL: http://ml:8200
+      RCA_TOPOLOGY_PATH: /data/topology.json
+    volumes:
+      - ./data:/data
+    depends_on:
+      backend:
+        condition: service_healthy

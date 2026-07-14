@@ -22,9 +22,13 @@ Everything runs fully offline — zero outbound calls.
                                                       └─────────┬─────────┘
                                                                 ▼
                                       ┌────────────┐  ┌───────────────────┐
-                                      │ digital    │  │ copilot/ (Phase 4)│
-                                      │ twin (P5)  │◀─│ Ollama + RAG      │
-                                      └────────────┘  └───────────────────┘
+                                      │ rca/ (P3)  │  │ copilot/ (Phase 4)│
+                                      │ topology   │─▶│ Ollama + RAG      │
+                                      │ cascade RCA│  └─────────┬─────────┘
+                                      │  :8300     │            ▼
+                                      └────────────┘  ┌───────────────────┐
+                                                      │ digital twin (P5) │
+                                                      └───────────────────┘
 ```
 
 **Phase 1 (this repo, working now):** simulator → backend → SQLite + live WS.
@@ -135,6 +139,15 @@ Interactive API docs: **http://localhost:8000/docs** (backend) and
 | `WS /ws/predictions` | Pushes a prediction update every time a node/interface's buffer is recomputed |
 | `GET /health` | Liveness |
 
+### rca / cascade RCA (`:8300`)
+
+| Endpoint | Description |
+|---|---|
+| `GET /incidents` | Current correlated incidents (active first, newest first), each with a ranked root cause + predicted cascade |
+| `GET /incidents/{incident_id}` | One incident by id |
+| `WS /ws/incidents` | Pushes an incident update whenever one opens, changes, or resolves |
+| `GET /health` | Liveness |
+
 ## Injecting faults (precursor patterns for ML)
 
 Faults ramp **gradually** (`ramp_seconds`), hold at full effect
@@ -171,6 +184,9 @@ backend/     FastAPI app — routers → services → repository (SQLite)
 simulator/   Telemetry generator + fault-injection API
 ml/          Phase 2 predictive fault engine (working) — LightGBM classifier +
              regressor, standalone FastAPI service; see ml/README.md
+rca/         Phase 3 topology-aware RCA (working) — pure-Python graph correlation,
+             root-cause scoring + cascade prediction, standalone FastAPI service
+             (:8300); see rca/README.md
 copilot/     Phase 4 placeholder — Ollama + RAG integration notes
 frontend/    Phase 6 placeholder — endpoints the dashboard will consume
 data/        topology.json (tracked) + drishti.db (generated, git-ignored)
@@ -181,6 +197,10 @@ data/        topology.json (tracked) + drishti.db (generated, git-ignored)
 - **Predictive fault engine** (`ml/`, Phase 2): LightGBM classifier + regressor,
   standalone FastAPI service (:8200), runs offline on buffered metrics. See
   `ml/README.md` to generate training data via fault injection and train models.
+- **Cascade RCA** (`rca/`, Phase 3): topology-aware root-cause + cascade engine,
+  standalone FastAPI service (:8300). Correlates events (+ optional Phase 2
+  predictions) into incidents with a ranked root cause and predicted blast radius;
+  deterministic pure-Python graph heuristics, no extra ML deps. See `rca/README.md`.
 - **Network sim**: scenarios live in `simulator/sim/faults.py` — add a new
   scenario by adding a `SCENARIOS` entry, a branch in `modifiers_for`, and a
   `_tick_<name>` event emitter.
@@ -193,7 +213,7 @@ data/        topology.json (tracked) + drishti.db (generated, git-ignored)
 
 1. ✅ Telemetry simulator + ingestion backend (this phase)
 2. ✅ Predictive fault engine (LightGBM, time-to-impact)
-3. Graph cascade correlation (topology-aware RCA)
+3. ✅ Graph cascade correlation (topology-aware RCA)
 4. Offline LLM copilot (Ollama Mistral 7B + ChromaDB RAG)
 5. Digital twin validation (Containerlab)
 6. Operator dashboard (React)
