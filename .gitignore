@@ -25,3 +25,6 @@ twin/lab/
 .vscode/
 .idea/
 .DS_Store
+
+# scratch/temp extraction files
+scratch_*

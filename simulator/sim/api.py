@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from sim.config import get_settings
@@ -74,6 +75,12 @@ def create_app() -> FastAPI:
         description="Synthetic MPLS/SD-WAN telemetry with fault injection",
         version="0.1.0",
         lifespan=lifespan,
+    )
+
+    # The operator dashboard (Phase 6) injects faults from the browser; allow it
+    # cross-origin like the other services. Everything runs on a closed network.
+    app.add_middleware(
+        CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
     )
 
     @app.get("/health", tags=["system"])

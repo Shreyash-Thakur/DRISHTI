@@ -124,6 +124,19 @@
   .ev .ts { color: var(--muted); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
   .ev .node { color: var(--ink-2); font-weight: 600; flex: 0 0 auto; }
   .ev .msg { color: var(--ink-2); }
+  #inject-panel { grid-column: span 12; }
+  .inject { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .inject select {
+    font: inherit; padding: 7px 10px; border-radius: 8px;
+    border: 1px solid var(--hair); background: var(--surface-2); color: var(--ink);
+  }
+  .inject button { margin-top: 0; padding: 8px 14px; border-radius: 8px; font-size: 13px; }
+  .inject button.secondary { background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--hair); }
+  .inject button:disabled { opacity: 0.55; cursor: default; }
+  .hint { color: var(--muted); font-size: 12px; }
+  #active-faults { margin: 10px 0 4px; font-size: 12px; }
+  #active-faults .fault { color: var(--ink-2); }
+  #active-faults .fault b { color: var(--warning); }
 </style>
 </head>
 <body>
@@ -133,6 +146,18 @@
 </header>
 <div class="cfg" id="cfg"></div>
 <main>
+  <section class="panel" id="inject-panel">
+    <h2>Fault injection</h2>
+    <div class="inject">
+      <select id="inj-scenario" aria-label="scenario"></select>
+      <select id="inj-node" aria-label="node"></select>
+      <button id="inj-go" type="button">Inject fault</button>
+      <button id="inj-clear" type="button" class="secondary">Clear all</button>
+      <span id="inj-status" class="hint"></span>
+    </div>
+    <div id="active-faults" class="hint">no active faults</div>
+    <p class="hint">Faults ramp gradually — watch <b>Predicted risk</b> climb, an <b>incident</b> appear and tint the map, then hit <b>Explain</b> for the copilot narrative.</p>
+  </section>
   <section class="panel" id="topology-panel">
     <h2>Topology</h2>
     <div id="topology"><span class="empty">loading topology…</span></div>
@@ -161,12 +186,13 @@
 const qs = new URLSearchParams(location.search);
 const SVC = {
   backend: qs.get("backend") || "http://localhost:8000",
+  simulator: qs.get("simulator") || "http://localhost:8100",
   ml: qs.get("ml") || "http://localhost:8200",
   rca: qs.get("rca") || "http://localhost:8300",
   copilot: qs.get("copilot") || "http://localhost:8400",
 };
 document.getElementById("cfg").textContent =
-  `backend ${SVC.backend} · ml ${SVC.ml} · rca ${SVC.rca} · copilot ${SVC.copilot}`;
+  `backend ${SVC.backend} · simulator ${SVC.simulator} · ml ${SVC.ml} · rca ${SVC.rca} · copilot ${SVC.copilot}`;
 
 // ---- tiny DOM helper ------------------------------------------------------
 function el(tag, props = {}, ...kids) {
@@ -229,6 +255,10 @@ async function loadTopology() {
   if (!topo) return;
   TOPOLOGY = topo;
   renderTopology({});
+  const nodeSel = document.getElementById("inj-node");
+  if (nodeSel && !nodeSel.options.length) {
+    for (const n of topo.nodes || []) nodeSel.append(el("option", { value: n.id }, n.id));
+  }
 }
 function renderTopology(nodeState) {
   if (!TOPOLOGY) return;
@@ -384,12 +414,57 @@ function schedulePoll() {
   pollTimer = setInterval(poll, 5000);
 }
 
+// ---- fault injection ------------------------------------------------------
+async function loadScenarios() {
+  const sel = document.getElementById("inj-scenario");
+  const scenarios = await safeJson(`${SVC.simulator}/scenarios`);
+  if (!scenarios) { sel.append(el("option", { value: "congestion_ramp" }, "congestion_ramp")); return; }
+  for (const name of Object.keys(scenarios)) {
+    sel.append(el("option", { value: name, title: scenarios[name].description || "" }, name));
+  }
+}
+async function refreshFaults() {
+  const box = document.getElementById("active-faults");
+  const faults = await safeJson(`${SVC.simulator}/faults`);
+  if (!faults || !faults.length) { box.className = "hint"; box.textContent = "no active faults"; return; }
+  box.className = "";
+  box.replaceChildren(...faults.map((f) => el("div", { class: "fault" },
+    el("b", {}, f.scenario), ` on ${f.node_id}${f.interface ? " / " + f.interface : ""} · ${f.fault_id}`)));
+}
+async function injectFault() {
+  const go = document.getElementById("inj-go");
+  const status = document.getElementById("inj-status");
+  const scenario = document.getElementById("inj-scenario").value;
+  const node_id = document.getElementById("inj-node").value;
+  if (!scenario || !node_id) { status.textContent = "pick a scenario and node"; return; }
+  go.disabled = true; status.textContent = `injecting ${scenario} on ${node_id}…`;
+  // A brisk ramp so the precursor signal is visible during a live demo.
+  const res = await safeJson(`${SVC.simulator}/faults`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ scenario, node_id, params: { ramp_seconds: 15, hold_seconds: 600 } }),
+  });
+  go.disabled = false;
+  status.textContent = res ? `injected ${res.fault_id} — watch the panels update` : "simulator unreachable";
+  refreshFaults();
+}
+async function clearFaults() {
+  const status = document.getElementById("inj-status");
+  await safeJson(`${SVC.simulator}/faults`, { method: "DELETE" });
+  status.textContent = "cleared all faults";
+  refreshFaults();
+}
+document.getElementById("inj-go").addEventListener("click", injectFault);
+document.getElementById("inj-clear").addEventListener("click", clearFaults);
+
 // ---- boot -----------------------------------------------------------------
 loadTopology();
+loadScenarios();
 pollHealth();
 refreshIncidents();
+refreshFaults();
 setInterval(pollHealth, 5000);
 setInterval(refreshIncidents, 5000);
+setInterval(refreshFaults, 5000);
 connectEvents();
 </script>
 </body>
