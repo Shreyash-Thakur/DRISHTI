@@ -43,7 +43,8 @@ ENV DRISHTI_TOPOLOGY_PATH=/app/data/topology.json \
     ML_TOPOLOGY_PATH=/app/data/topology.json \
     RCA_TOPOLOGY_PATH=/app/data/topology.json \
     COPILOT_RUNBOOKS_DIR=/app/data/runbooks \
-    COPILOT_OLLAMA_URL=http://host.docker.internal:11434
+    COPILOT_OLLAMA_URL=http://host.docker.internal:11434 \
+    COPILOT_MODEL=qwen3:8b
 
 # backend, simulator, ml, rca, copilot, dashboard
 EXPOSE 8000 8100 8200 8300 8400 8080

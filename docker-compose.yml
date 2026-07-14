@@ -75,7 +75,7 @@ services:
       # host.docker.internal resolves to the host; on Linux add the extra_hosts
       # mapping below (host-gateway) to reach it.
       COPILOT_OLLAMA_URL: http://host.docker.internal:11434
-      COPILOT_MODEL: mistral:7b
+      COPILOT_MODEL: qwen3:8b
       COPILOT_RCA_URL: http://rca:8300
       COPILOT_RUNBOOKS_DIR: /data/runbooks
     extra_hosts:
