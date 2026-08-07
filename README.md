@@ -276,6 +276,11 @@ curl -X POST localhost:8100/faults -H "Content-Type: application/json" \
 | `POST /admin/reset` | Flush the event buffer + incidents (clean-slate reset for demos, so incidents don't linger through symptom decay) |
 | `GET /health` | Liveness |
 
+
+<img width="775" height="596" alt="Drishti Metrics 0826 demo" src="https://github.com/user-attachments/assets/eb396929-6f01-49a9-bbaf-f93ef2032e4a" />
+
+Metrics as of 08-08-2026.
+
 ### copilot / RCA explainer (`:8400`)
 
 | Endpoint | Description |
