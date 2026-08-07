@@ -6,9 +6,24 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+
 import lightgbm as lgb
 import pandas as pd
-from sklearn.metrics import mean_absolute_error, roc_auc_score
+import time
+
+from sklearn.metrics import (
+    accuracy_score,
+    classification_report,
+    confusion_matrix,
+    f1_score,
+    matthews_corrcoef,
+    mean_absolute_error,
+    mean_squared_error,
+    precision_score,
+    r2_score,
+    recall_score,
+    roc_auc_score,
+)
 from sklearn.model_selection import GroupShuffleSplit, StratifiedGroupKFold
 
 from ml.config import get_settings
@@ -48,10 +63,49 @@ def train_classifier(df: pd.DataFrame) -> tuple[lgb.LGBMClassifier, float]:
         if df.iloc[te]["is_precursor"].nunique() > 1
     )
     model = lgb.LGBMClassifier(n_estimators=200, random_state=0)
-    model.fit(df.iloc[train_idx][features], df.iloc[train_idx]["is_precursor"])
-    predictions = model.predict_proba(df.iloc[test_idx][features])[:, 1]
-    auc = roc_auc_score(df.iloc[test_idx]["is_precursor"], predictions)
-    return model, float(auc)
+    model.fit(
+    df.iloc[train_idx][features],
+    df.iloc[train_idx]["is_precursor"],
+    )   
+    X_test = df.iloc[test_idx][features]
+    y_test = df.iloc[test_idx]["is_precursor"]
+
+    probs = model.predict_proba(X_test)[:, 1]
+    preds = model.predict(X_test)
+    start = time.perf_counter()
+    _ = model.predict(X_test)
+    latency = (time.perf_counter() - start) * 1000 / len(X_test)
+    auc = roc_auc_score(y_test, probs)
+    accuracy = accuracy_score(y_test, preds)
+    precision = precision_score(y_test, preds)
+    recall = recall_score(y_test, preds)
+    f1 = f1_score(y_test, preds)
+    mcc = matthews_corrcoef(y_test, preds)
+
+    print("\n=== Classifier Evaluation ===")
+    print(f"Accuracy : {accuracy:.3f}")
+    print(f"Precision: {precision:.3f}")
+    print(f"Recall   : {recall:.3f}")
+    print(f"F1 Score : {f1:.3f}")
+    print(f"ROC-AUC  : {auc:.3f}")
+    print(f"MCC             : {mcc:.3f}")
+    print(f"Inference       : {latency:.3f} ms/sample")
+
+    print("\nConfusion Matrix")
+    print(confusion_matrix(y_test, preds))
+
+    print("\nClassification Report")
+    print(classification_report(y_test, preds))
+
+    return model, {
+    "auc": auc,
+    "accuracy": accuracy,
+    "precision": precision,
+    "recall": recall,
+    "f1": f1,
+    "mcc": mcc,
+    "latency": latency,
+    }
 
 
 def train_regressor(df: pd.DataFrame) -> tuple[lgb.LGBMRegressor, float]:
@@ -63,8 +117,23 @@ def train_regressor(df: pd.DataFrame) -> tuple[lgb.LGBMRegressor, float]:
     model = lgb.LGBMRegressor(n_estimators=200, random_state=0)
     model.fit(ramp_only.iloc[train_idx][features], ramp_only.iloc[train_idx]["seconds_to_impact"])
     predictions = model.predict(ramp_only.iloc[test_idx][features])
-    mae = mean_absolute_error(ramp_only.iloc[test_idx]["seconds_to_impact"], predictions)
-    return model, float(mae)
+
+    y_test = ramp_only.iloc[test_idx]["seconds_to_impact"]
+
+    mae = mean_absolute_error(y_test, predictions)
+    rmse = mean_squared_error(y_test, predictions) ** 0.5
+    r2 = r2_score(y_test, predictions)
+
+    print("\n========== REGRESSOR ==========")
+    print(f"MAE   : {mae:.2f} s")
+    print(f"RMSE  : {rmse:.2f} s")
+    print(f"R²    : {r2:.3f}")
+
+    return model, {
+    "mae": mae,
+    "rmse": rmse,
+    "r2": r2,
+    }
 
 
 def save_models(classifier: lgb.LGBMClassifier, regressor: lgb.LGBMRegressor, model_dir: Path) -> None:
@@ -77,11 +146,50 @@ def save_models(classifier: lgb.LGBMClassifier, regressor: lgb.LGBMRegressor, mo
 def main() -> None:
     settings = get_settings()
     df = load_training_set(settings.dataset_dir / "training.parquet")
-    classifier, auc = train_classifier(df)
-    regressor, mae = train_regressor(df)
-    print(f"classifier held-out AUC: {auc:.3f}")
-    print(f"regressor held-out MAE: {mae:.1f}s")
+    print("\n========== DATASET ==========")
+    print(f"Samples            : {len(df)}")
+    print(f"Features           : {len(feature_names())}")
+    print(f"Positive samples   : {df['is_precursor'].sum()}")
+    print(f"Negative samples   : {len(df)-df['is_precursor'].sum()}")
+    classifier, cls = train_classifier(df)
+    print("\n========== TOP 10 FEATURES ==========")
+
+    importance = sorted(
+        zip(feature_names(), classifier.feature_importances_),
+        key=lambda x: x[1],
+        reverse=True,
+    )
+
+    for name, score in importance[:10]:
+        print(f"{name:35} {score}")
+    regressor, reg = train_regressor(df)
+
+    print("\n========== FINAL METRICS ==========")
+    print(f"Accuracy   : {cls['accuracy']:.3f}")
+    print(f"Precision  : {cls['precision']:.3f}")
+    print(f"Recall     : {cls['recall']:.3f}")
+    print(f"F1         : {cls['f1']:.3f}")
+    print(f"ROC-AUC    : {cls['auc']:.3f}")
+    print(f"MCC        : {cls['mcc']:.3f}")
+    print(f"Latency    : {cls['latency']:.3f} ms/sample")
+
+    print()
+
+    print(f"MAE        : {reg['mae']:.2f}s")
+    print(f"RMSE       : {reg['rmse']:.2f}s")
+    print(f"R²         : {reg['r2']:.3f}")
     save_models(classifier, regressor, settings.model_dir)
+    classifier_size = (
+    settings.model_dir / "classifier.txt"
+    ).stat().st_size / 1024
+
+    regressor_size = (
+        settings.model_dir / "regressor.txt"
+    ).stat().st_size / 1024
+
+    print("\n========== MODEL ==========")
+    print(f"Classifier size : {classifier_size:.1f} KB")
+    print(f"Regressor size  : {regressor_size:.1f} KB")
     print(f"saved models to {settings.model_dir}")
 
 

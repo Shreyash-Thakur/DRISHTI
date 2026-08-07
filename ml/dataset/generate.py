@@ -16,8 +16,8 @@ from ml.features import compute_features
 from ml.labels import is_in_ramp_window, seconds_to_impact
 
 SCENARIOS = ["congestion_ramp", "bgp_flap_precursor", "link_degradation"]
-RAMP_SECONDS = 120
-HOLD_SECONDS = 30
+RAMP_SECONDS = 20
+HOLD_SECONDS = 10
 BASELINE_GAP_SECONDS = 60
 
 
