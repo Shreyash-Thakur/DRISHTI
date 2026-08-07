@@ -1,4 +1,4 @@
-# DRISHTI — Predictive NOC Copilot for Secure MPLS/SD-WAN Operations
+# DRISHTI — Predictive NOC Copilot for Secure MPLS/SD-WAN Operations.
 
 **DRISHTI** is an air-gapped copilot for network operations centers that:
 
